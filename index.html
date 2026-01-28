@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de PPM</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #1c1e21;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1877f2;
+            margin-bottom: 1.5rem;
+        }
+        .timer-display {
+            font-size: 3rem;
+            font-weight: bold;
+            height: 60px;
+            line-height: 60px;
+            margin: 2rem 0;
+            color: #1c1e21;
+        }
+        .controls {
+            margin-bottom: 1.5rem;
+        }
+        .word-count-control {
+            margin-bottom: 1rem;
+        }
+        .result-display {
+            font-size: 1.5rem;
+            margin-top: 2rem;
+            min-height: 30px;
+        }
+        button {
+            background-color: #1877f2;
+            color: #ffffff;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #166fe5;
+        }
+        button:disabled {
+            background-color: #a0a0a0;
+            cursor: not-allowed;
+        }
+        .toggle-button.running {
+            background-color: #fa383e;
+        }
+        .toggle-button.running:hover {
+            background-color: #e32f34;
+        }
+        .presets {
+            margin-bottom: 2rem;
+        }
+        .preset-btn {
+            background-color: #e4e6eb;
+            color: #1c1e21;
+            margin: 0 0.5rem;
+        }
+        .preset-btn:hover {
+            background-color: #dcdfe3;
+        }
+        label {
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+        input[type="number"] {
+            width: 100px;
+            padding: 0.5rem;
+            border: 1px solid #dddfe2;
+            border-radius: 6px;
+            font-size: 1rem;
+            text-align: center;
+        }
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 4px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 30px;
+            font-size: 1rem;
+            opacity: 0;
+            transition: opacity 0.5s, visibility 0.5s, bottom 0.5s;
+        }
+        #toast.show {
+            visibility: visible;
+            opacity: 1;
+        }
+        #reset-storage-btn {
+            background-color: #6c757d;
+            margin-left: 0.5rem;
+        }
+        #reset-storage-btn:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Calculadora de Palabras por Minuto</h1>
+
+    <div class="word-count-control">
+        <label for="word-count-input">Cantidad de Palabras:</label>
+        <input type="number" id="word-count-input" value="100" min="1">
+    </div>
+
+    <div class="presets">
+        <label>Cantidades:</label>
+        <button class="preset-btn" data-words="469">Consumno Cultural</button>
+        <button class="preset-btn" data-words="314">Alebrijes</button>
+    </div>
+
+    <div class="timer-display" id="timer-display">0.00s</div>
+    
+    <div class="controls">
+        <button id="toggle-timer-btn" class="toggle-button">Iniciar Cronómetro</button>
+        <button id="reset-storage-btn">Reiniciar</button>
+    </div>
+
+    <div class="result-display" id="result-display"></div>
+    
+</div>
+<div id="toast"></div>
+
+<script>
+    const wordCountInput = document.getElementById('word-count-input');
+    const timerDisplay = document.getElementById('timer-display');
+    const toggleTimerBtn = document.getElementById('toggle-timer-btn');
+    const resultDisplay = document.getElementById('result-display');
+    const presetButtons = document.querySelectorAll('.preset-btn');
+    const resetStorageBtn = document.getElementById('reset-storage-btn');
+    const toast = document.getElementById('toast');
+
+    let isRunning = false;
+    let timerInterval = null;
+    let startTime = 0;
+    let elapsedTime = 0;
+    let toastTimeout = null;
+
+    function showToast(message) {
+        if (toastTimeout) {
+            clearTimeout(toastTimeout);
+        }
+        toast.textContent = message;
+        toast.classList.add('show');
+        toastTimeout = setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+
+    function setWordCount(words) {
+        if (!words || words < 1) return;
+        wordCountInput.value = words;
+        localStorage.setItem('lastSelectedWordCount', words);
+        showToast('Cantidad de palabras guardada');
+    }
+
+    function formatTime(ms) {
+        const seconds = ms / 1000;
+        return seconds.toFixed(2) + 's';
+    }
+
+    function formatTimeMMSS(ms) {
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    function startTimer() {
+        const wordCount = parseInt(wordCountInput.value, 10);
+        if (isNaN(wordCount) || wordCount < 1) {
+            resultDisplay.textContent = "Por favor, introduce un número de palabras válido.";
+            return;
+        }
+
+        isRunning = true;
+        startTime = Date.now();
+        
+        toggleTimerBtn.textContent = 'Detener Cronómetro';
+        toggleTimerBtn.classList.add('running');
+        wordCountInput.disabled = true;
+        resetStorageBtn.disabled = true;
+        presetButtons.forEach(b => b.disabled = true);
+        resultDisplay.textContent = "";
+
+        timerInterval = setInterval(() => {
+            const currentTime = Date.now();
+            elapsedTime = currentTime - startTime;
+            timerDisplay.textContent = formatTime(elapsedTime);
+        }, 100);
+    }
+
+    function stopTimer() {
+        clearInterval(timerInterval);
+        isRunning = false;
+        
+        toggleTimerBtn.textContent = 'Iniciar Cronómetro';
+        toggleTimerBtn.classList.remove('running');
+        wordCountInput.disabled = false;
+        resetStorageBtn.disabled = false;
+        presetButtons.forEach(b => b.disabled = false);
+        
+        calculateWPM();
+    }
+    
+    function calculateWPM() {
+        const wordCount = parseInt(wordCountInput.value, 10);
+        const elapsedSeconds = elapsedTime / 1000;
+
+        if (elapsedSeconds > 0) {
+            const wpm = (wordCount / elapsedSeconds) * 60;
+            const timeFormatted = formatTimeMMSS(elapsedTime);
+            resultDisplay.textContent = `Tu velocidad es de ${wpm.toFixed(0)} PPM en un tiempo de ${timeFormatted}.`;
+        } else {
+             resultDisplay.textContent = "";
+        }
+    }
+
+    function toggleTimer() {
+        if (isRunning) {
+            stopTimer();
+        } else {
+            startTimer();
+        }
+    }
+
+    toggleTimerBtn.addEventListener('click', toggleTimer);
+
+    presetButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const words = parseInt(button.getAttribute('data-words'), 10);
+            setWordCount(words);
+        });
+    });
+
+    wordCountInput.addEventListener('input', () => {
+        const words = parseInt(wordCountInput.value, 10);
+        if (!isNaN(words)) {
+            setWordCount(words);
+        }
+    });
+
+    resetStorageBtn.addEventListener('click', () => {
+        localStorage.removeItem('lastSelectedWordCount');
+        wordCountInput.value = "100";
+        showToast('Almacenamiento reiniciado');
+    });
+
+    window.addEventListener('load', () => {
+        const lastWordCount = localStorage.getItem('lastSelectedWordCount');
+        if (lastWordCount) {
+            wordCountInput.value = lastWordCount;
+            showToast('Última cantidad de palabras cargada');
+        } else {
+            showToast('No hay datos guardados');
+        }
+    });
+
+</script>
+
+</body>
+</html>
