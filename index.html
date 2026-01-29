@@ -146,8 +146,9 @@
     <div class="timer-display" id="timer-display">0.00s</div>
     
     <div class="controls">
-        <button id="toggle-timer-btn" class="toggle-button">Iniciar Cronómetro</button>
-        <button id="reset-storage-btn">Reiniciar</button>
+        <button id="start-pause-resume-btn" class="toggle-button">Iniciar Cronómetro</button>
+        <button id="stop-btn" disabled>Detener</button>
+        <button id="reset-storage-btn">Reiniciar Almacenamiento</button>
     </div>
 
     <div class="result-display" id="result-display"></div>
@@ -158,13 +159,15 @@
 <script>
     const wordCountInput = document.getElementById('word-count-input');
     const timerDisplay = document.getElementById('timer-display');
-    const toggleTimerBtn = document.getElementById('toggle-timer-btn');
+    const startPauseResumeBtn = document.getElementById('start-pause-resume-btn');
+    const stopBtn = document.getElementById('stop-btn');
     const resultDisplay = document.getElementById('result-display');
     const presetButtons = document.querySelectorAll('.preset-btn');
     const resetStorageBtn = document.getElementById('reset-storage-btn');
     const toast = document.getElementById('toast');
 
     let isRunning = false;
+    let isPaused = false;
     let timerInterval = null;
     let startTime = 0;
     let elapsedTime = 0;
@@ -200,41 +203,71 @@
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
 
-    function startTimer() {
-        const wordCount = parseInt(wordCountInput.value, 10);
-        if (isNaN(wordCount) || wordCount < 1) {
-            resultDisplay.textContent = "Por favor, introduce un número de palabras válido.";
-            return;
-        }
-
-        isRunning = true;
-        startTime = Date.now();
-        
-        toggleTimerBtn.textContent = 'Detener Cronómetro';
-        toggleTimerBtn.classList.add('running');
+    function disableInputs() {
         wordCountInput.disabled = true;
         resetStorageBtn.disabled = true;
         presetButtons.forEach(b => b.disabled = true);
-        resultDisplay.textContent = "";
-
-        timerInterval = setInterval(() => {
-            const currentTime = Date.now();
-            elapsedTime = currentTime - startTime;
-            timerDisplay.textContent = formatTime(elapsedTime);
-        }, 100);
     }
 
-    function stopTimer() {
-        clearInterval(timerInterval);
-        isRunning = false;
-        
-        toggleTimerBtn.textContent = 'Iniciar Cronómetro';
-        toggleTimerBtn.classList.remove('running');
+    function enableInputs() {
         wordCountInput.disabled = false;
         resetStorageBtn.disabled = false;
         presetButtons.forEach(b => b.disabled = false);
-        
+    }
+
+    function updateTimer() {
+        const currentTime = Date.now();
+        elapsedTime = currentTime - startTime;
+        timerDisplay.textContent = formatTime(elapsedTime);
+    }
+
+    function handleStartPauseResume() {
+        if (isRunning && !isPaused) { // PAUSE
+            isPaused = true;
+            clearInterval(timerInterval);
+            startPauseResumeBtn.textContent = 'Reanudar';
+            startPauseResumeBtn.classList.remove('running');
+        } else if (isRunning && isPaused) { // RESUME
+            isPaused = false;
+            startTime = Date.now() - elapsedTime;
+            timerInterval = setInterval(updateTimer, 100);
+            startPauseResumeBtn.textContent = 'Pausar';
+            startPauseResumeBtn.classList.add('running');
+        } else { // START
+            const wordCount = parseInt(wordCountInput.value, 10);
+            if (isNaN(wordCount) || wordCount < 1) {
+                resultDisplay.textContent = "Por favor, introduce un número de palabras válido.";
+                return;
+            }
+            isRunning = true;
+            isPaused = false;
+            startTime = Date.now();
+            elapsedTime = 0;
+            
+            timerInterval = setInterval(updateTimer, 100);
+            
+            startPauseResumeBtn.textContent = 'Pausar';
+            startPauseResumeBtn.classList.add('running');
+            stopBtn.disabled = false;
+            disableInputs();
+            resultDisplay.textContent = "";
+        }
+    }
+
+    function stopAndResetTimer() {
+        clearInterval(timerInterval);
         calculateWPM();
+        
+        isRunning = false;
+        isPaused = false;
+        
+        startPauseResumeBtn.textContent = 'Iniciar Cronómetro';
+        startPauseResumeBtn.classList.remove('running');
+        stopBtn.disabled = true;
+        enableInputs();
+        
+        elapsedTime = 0;
+        timerDisplay.textContent = formatTime(elapsedTime);
     }
     
     function calculateWPM() {
@@ -250,15 +283,8 @@
         }
     }
 
-    function toggleTimer() {
-        if (isRunning) {
-            stopTimer();
-        } else {
-            startTimer();
-        }
-    }
-
-    toggleTimerBtn.addEventListener('click', toggleTimer);
+    startPauseResumeBtn.addEventListener('click', handleStartPauseResume);
+    stopBtn.addEventListener('click', stopAndResetTimer);
 
     presetButtons.forEach(button => {
         button.addEventListener('click', () => {
