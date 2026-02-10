@@ -42,6 +42,20 @@
         .controls {
             margin-bottom: 1.5rem;
         }
+        .evaluation-section {
+            background-color: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+        }
+        .name-input-group {
+            margin-bottom: 1rem;
+        }
+        .name-input-group input {
+            width: calc(100% - 12px);
+            padding: 0.6rem;
+            margin-top: 0.5rem;
+        }
         .word-count-control {
             margin-bottom: 1rem;
         }
@@ -49,6 +63,80 @@
             font-size: 1.5rem;
             margin-top: 2rem;
             min-height: 30px;
+        }
+        .evaluations-section {
+            margin-top: 1.5rem;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .modal.show {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        .modal-header {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+            color: #1877f2;
+        }
+        .close-modal-btn {
+            background-color: #6c757d;
+            float: right;
+            padding: 0.5rem 1rem;
+            margin-bottom: 1rem;
+        }
+        .close-modal-btn:hover {
+            background-color: #5a6268;
+        }
+        .evaluation-item {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid #1877f2;
+        }
+        .evaluation-item-name {
+            font-weight: bold;
+            color: #1877f2;
+            margin-bottom: 0.5rem;
+        }
+        .evaluation-item-data {
+            color: #1c1e21;
+            margin: 0.3rem 0;
+        }
+        .delete-evaluation-btn {
+            background-color: #fa383e;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+        .delete-evaluation-btn:hover {
+            background-color: #e32f34;
+        }
+        .empty-message {
+            text-align: center;
+            color: #8a8d91;
+            padding: 2rem;
+            font-size: 1.1rem;
         }
         button {
             background-color: #1877f2;
@@ -147,12 +235,30 @@
     
     <div class="controls">
         <button id="start-pause-resume-btn" class="toggle-button">Iniciar Cronómetro</button>
-        <button id="stop-btn" disabled>Detener</button>
-        <button id="reset-storage-btn">Reiniciar Almacenamiento</button>
+    </div>
+
+    <div class="evaluation-section">
+        <div class="name-input-group">
+            <label for="person-name-input">Nombre de la Persona:</label>
+            <input type="text" id="person-name-input" placeholder="Ingresa el nombre">
+        </div>
+        <button id="stop-btn" disabled>Detener y Guardar Evaluación</button>
+        <button id="reset-storage-btn">Reiniciar Almacenamiento de Palabras</button>
     </div>
 
     <div class="result-display" id="result-display"></div>
     
+    <div class="evaluations-section">
+        <button id="view-evaluations-btn">Ver Evaluaciones Guardadas</button>
+    </div>
+    
+</div>
+<div id="evaluations-modal" class="modal">
+    <div class="modal-content">
+        <button id="close-modal-btn" class="close-modal-btn">Cerrar</button>
+        <div class="modal-header">Evaluaciones Guardadas</div>
+        <div id="evaluations-list"></div>
+    </div>
 </div>
 <div id="toast"></div>
 
@@ -164,6 +270,11 @@
     const resultDisplay = document.getElementById('result-display');
     const presetButtons = document.querySelectorAll('.preset-btn');
     const resetStorageBtn = document.getElementById('reset-storage-btn');
+    const personNameInput = document.getElementById('person-name-input');
+    const viewEvaluationsBtn = document.getElementById('view-evaluations-btn');
+    const evaluationsModal = document.getElementById('evaluations-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const evaluationsList = document.getElementById('evaluations-list');
     const toast = document.getElementById('toast');
 
     let isRunning = false;
@@ -206,12 +317,14 @@
     function disableInputs() {
         wordCountInput.disabled = true;
         resetStorageBtn.disabled = true;
+        personNameInput.disabled = true;
         presetButtons.forEach(b => b.disabled = true);
     }
 
     function enableInputs() {
         wordCountInput.disabled = false;
         resetStorageBtn.disabled = false;
+        personNameInput.disabled = false;
         presetButtons.forEach(b => b.disabled = false);
     }
 
@@ -254,9 +367,43 @@
         }
     }
 
+    function saveEvaluation(personName, wpm, timeFormatted, elapsedTime) {
+        const evaluations = JSON.parse(localStorage.getItem('evaluations')) || [];
+        
+        const evaluation = {
+            id: Date.now(),
+            name: personName,
+            wpm: wpm,
+            time: timeFormatted,
+            date: new Date().toLocaleString('es-ES'),
+            elapsedMs: elapsedTime
+        };
+        
+        evaluations.push(evaluation);
+        localStorage.setItem('evaluations', JSON.stringify(evaluations));
+        showToast(`Evaluación de ${personName} guardada exitosamente`);
+    }
+
     function stopAndResetTimer() {
         clearInterval(timerInterval);
-        calculateWPM();
+        
+        const personName = personNameInput.value.trim();
+        const wordCount = parseInt(wordCountInput.value, 10);
+        const elapsedSeconds = elapsedTime / 1000;
+
+        if (elapsedSeconds > 0) {
+            const wpm = (wordCount / elapsedSeconds) * 60;
+            const timeFormatted = formatTimeMMSS(elapsedTime);
+            resultDisplay.textContent = `Tu velocidad es de ${wpm.toFixed(0)} PPM en un tiempo de ${timeFormatted}.`;
+            
+            if (personName) {
+                saveEvaluation(personName, wpm.toFixed(0), timeFormatted, elapsedTime);
+            } else {
+                showToast('Por favor, ingresa un nombre para guardar la evaluación');
+            }
+        } else {
+             resultDisplay.textContent = "";
+        }
         
         isRunning = false;
         isPaused = false;
@@ -269,18 +416,38 @@
         elapsedTime = 0;
         timerDisplay.textContent = formatTime(elapsedTime);
     }
-    
-    function calculateWPM() {
-        const wordCount = parseInt(wordCountInput.value, 10);
-        const elapsedSeconds = elapsedTime / 1000;
 
-        if (elapsedSeconds > 0) {
-            const wpm = (wordCount / elapsedSeconds) * 60;
-            const timeFormatted = formatTimeMMSS(elapsedTime);
-            resultDisplay.textContent = `Tu velocidad es de ${wpm.toFixed(0)} PPM en un tiempo de ${timeFormatted}.`;
+    function displayEvaluations() {
+        const evaluations = JSON.parse(localStorage.getItem('evaluations')) || [];
+        
+        evaluationsList.innerHTML = '';
+        
+        if (evaluations.length === 0) {
+            evaluationsList.innerHTML = '<div class="empty-message">No hay evaluaciones guardadas</div>';
         } else {
-             resultDisplay.textContent = "";
+            evaluations.forEach(evaluation => {
+                const evaluationItem = document.createElement('div');
+                evaluationItem.className = 'evaluation-item';
+                evaluationItem.innerHTML = `
+                    <div class="evaluation-item-name">${evaluation.name}</div>
+                    <div class="evaluation-item-data">PPM: ${evaluation.wpm}</div>
+                    <div class="evaluation-item-data">Tiempo: ${evaluation.time}</div>
+                    <div class="evaluation-item-data">Fecha: ${evaluation.date}</div>
+                    <button class="delete-evaluation-btn" onclick="deleteEvaluation(${evaluation.id})">Eliminar</button>
+                `;
+                evaluationsList.appendChild(evaluationItem);
+            });
         }
+        
+        evaluationsModal.classList.add('show');
+    }
+
+    function deleteEvaluation(id) {
+        let evaluations = JSON.parse(localStorage.getItem('evaluations')) || [];
+        evaluations = evaluations.filter(e => e.id !== id);
+        localStorage.setItem('evaluations', JSON.stringify(evaluations));
+        displayEvaluations();
+        showToast('Evaluación eliminada');
     }
 
     startPauseResumeBtn.addEventListener('click', handleStartPauseResume);
@@ -303,7 +470,19 @@
     resetStorageBtn.addEventListener('click', () => {
         localStorage.removeItem('lastSelectedWordCount');
         wordCountInput.value = "100";
-        showToast('Almacenamiento reiniciado');
+        showToast('Almacenamiento de palabras reiniciado');
+    });
+
+    viewEvaluationsBtn.addEventListener('click', displayEvaluations);
+
+    closeModalBtn.addEventListener('click', () => {
+        evaluationsModal.classList.remove('show');
+    });
+
+    evaluationsModal.addEventListener('click', (e) => {
+        if (e.target === evaluationsModal) {
+            evaluationsModal.classList.remove('show');
+        }
     });
 
     window.addEventListener('load', () => {
